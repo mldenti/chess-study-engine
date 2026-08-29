@@ -1,0 +1,11 @@
+# Never commit the credential.
+lichess_token.txt
+
+# Mutable state.  These change every night and live in the Claude project,
+# which is what the scheduled job reads and writes.  Committing them would
+# guarantee merge pain and would leak nothing useful.
+intake_state.json
+puzzle_history.json
+
+__pycache__/
+*.pyc
