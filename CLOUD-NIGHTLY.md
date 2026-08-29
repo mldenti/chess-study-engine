@@ -1,142 +1,126 @@
 # Cloud nightly runbook
 
-You are a scheduled session.  **You have no access to Mitch's Mac.**  There is
-no device bridge in a scheduled run, so the Chess folder, its scripts and its
-games are all invisible to you.  This was tested on 28 Aug 2026 and confirmed:
-the `mcp__remote-devices__*` tools are not merely denied, they do not exist in
-the session.  Do not look for them and do not wait for them.
+You are a scheduled session with **no access to Mitch's Mac**.  There is no
+device bridge in a scheduled run; the tools do not exist in the session at all.
+That is expected.  Do not look for them and do not report their absence.
 
-Everything you need is in this project.  Everything you produce goes back into
-this project, and the next desktop session folds it into the folder.
+**Read this whole file before doing anything, then follow it literally.**  It is
+short on purpose.  Every extra thing you read, write or think about in this job
+costs real money on a task that usually has nothing to report.
 
-## What you can and cannot reach
+## The one rule
 
-**Can:** the project docs, via the Projects tool.  The open internet from the
-container shell, including `api.chess.com` and `lichess.org`, which are on the
-account's network allowlist.  A Stockfish binary, via apt.  python-chess, via
-pip.
+**Move as little through your context as possible.**  The shell can fetch, run
+and write things far more cheaply than you can.  Concretely:
 
-**Cannot:** the Mac, in any form.
-
-One trap worth naming, because a previous run fell into it.  The **WebFetch
-tool** declines both chess hosts on robots rules.  That says nothing about
-whether the scripts can reach them.  `fetch_games.py` uses `urllib` from the
-container, which is ordinary program network access governed by the account's
-egress allowlist, and it works.  Do not conclude from a WebFetch refusal that
-there is no fetch path, and do not use WebFetch to pull games.
+- Clone the toolchain.  Do not read the scripts.  You never need to see them.
+- When writing a file into the project, always pass `local_path`.  Never paste
+  file contents inline.  A busy night's PGN bundle is 30KB, and inlining it
+  costs more than the entire rest of the job.
+- Do not read `chess/knowledge/chess-lessons-and-method.md`.  It is 40KB and
+  nothing in this job needs it.  Contradiction-hunting is a weekly task, not a
+  nightly one.
 
 ## Steps
 
-**1.  Pull the toolchain out of the project.**
-
-Read these and write them to disk under `tools/`:
+**1.  Get the toolchain and the state.**
 
 ```
-chess/tools/fetch_games.py
-chess/tools/analyze.py
-chess/tools/annotate.py
-chess/tools/distill.py
-chess/tools/cloud_nightly.py
-chess/tools/puzzles_lichess.py
-chess/tools/intake_state.json
-chess/tools/lichess_token.txt
-chess/tools/puzzle_history.json
+git clone --depth 1 https://github.com/mldenti/chess-study-engine.git tools
 ```
 
-`intake_state.json` is the one that matters.  Its `seen` list is how the run
-knows which games are already in Mitch's folder without being able to see the
-folder.  If you cannot read it, **stop**: fetching without it would re-import
-games that already exist.
+Public repo, no credentials needed.  **Do not read the files it contains.**  You
+never need to see that code; running it is the whole point.
 
-`lichess_token.txt` is a personal API token with read-only scopes, used for the
-puzzle step and nothing else.  **Never print it, never paste it into a report,
-never put it in a session writeup or any file that goes to `chess/pending/`.**
-If it is missing the puzzle step skips itself and the games work is unaffected.
+If the clone fails, report the error and stop.  Do not reconstruct the toolchain
+by hand and do not look for the scripts in the project; they are deliberately
+not there any more, because a session that reads them costs more than a missed
+night.
 
-`puzzle_history.json` is the append-only series of puzzle snapshots.  Without it
-the run still works but cannot say what moved since last time.
-
-**2.  Set up the engine.**
+Then fetch these three from the project and write them into `tools/`:
 
 ```
-apt-get download stockfish && dpkg -x stockfish_*.deb sfx
-python3 -m venv .venv && .venv/bin/pip install -q --upgrade pip setuptools wheel && .venv/bin/pip install -q chess
+chess/tools/intake_state.json      required
+chess/tools/lichess_token.txt      optional, read only scopes, for puzzles
+chess/tools/puzzle_history.json    optional, the snapshot series
 ```
 
-The system pip cannot build python-chess on this image, so use the venv.
+Those three are the only project docs this job reads.  `intake_state.json` is
+the one that matters: its `seen` list is how the run knows which games are
+already in Mitch's folder without being able to see the folder.  **If you cannot
+read it, stop.**  Fetching without it would re-import games that already exist.
 
-**3.  Run the driver.**
+Never print the token, never quote it in a report, never let it reach
+`chess/pending/`.
 
-```
-STOCKFISH=$PWD/sfx/usr/games/stockfish .venv/bin/python tools/cloud_nightly.py --max-games 25
-```
-
-It pulls puzzle stats, then fetches, analyses, annotates and distils, and
-prints a JSON summary.
-
-The puzzle step runs first and is independent of games, so **a `nothing_new`
-result still has output worth writing back**: the puzzle note, the raw activity,
-and the two `chess/tools/` files.  `nothing_new` means only that no new *games*
-were found.  Say so in one line and do not manufacture a session file for a day
-with no games, but do write back what the puzzle step produced.
-
-Budget roughly 170 ms per ply at screening depth 16, so twenty games is a few
-minutes.  `--max-games` caps the night at N games, **oldest first**, and leaves
-the rest for tomorrow.  The state's `last_end` never advances past a deferred
-game, so a backlog drains in order over several nights and nothing is skipped.
-The driver's stderr says how many were left behind.
-
-**4.  Put the output back in the project.**
-
-Everything in `out/` goes to `chess/pending/`, same filenames:
+**2.  Run it.**
 
 ```
-chess/pending/games-YYYYMMDD.pgn
-chess/pending/YYYYMMDD-NN-analysis.md
-chess/pending/candidates-YYYYMMDD.csv
-chess/pending/puzzles-YYYYMMDD.md
-chess/pending/puzzle-activity-YYYYMMDD.ndjson
-chess/tools/intake_state.json        <- overwrite, do not put this in pending
-chess/tools/puzzle_history.json      <- overwrite, do not put this in pending
+python3 tools/cloud_nightly.py --max-games 25
 ```
 
-Two files are exceptions and must be written back over their `chess/tools/`
-copies rather than into pending, because tomorrow's run reads them:
-`intake_state.json`, which is how it knows what has already been fetched, and
-`puzzle_history.json`, which is the snapshot series.  **If you skip the state
-write, tomorrow's run re-imports tonight's games.**  Write both even if you
-write nothing else.  A nothing_new night still updates both.
+One command.  It fetches, and only if there are new games does it install
+Stockfish and build a venv, because on a quiet night that setup is pure waste.
+Then it analyses, annotates, distils and packs.  It prints one line of JSON.
 
-Leave anything already in `chess/pending/` alone.  It accumulates until Mitch
-runs the reconcile, and clearing it would lose nights he has not folded in yet.
+Do not install anything yourself.  Do not run the individual scripts.  If this
+command fails, report the error and stop; do not improvise a workaround.
 
-**5.  Report.**
+**3.  Write the results back.**
 
-Short.  How many games, the ACPL range and median, which motifs recurred, and
-anything that contradicts what the knowledge doc currently claims.  Lead with
-the contradiction.  Say plainly that the results are in `chess/pending/` and
-have not reached the folder yet.
+Everything it produced is in `out/`.  Write each file with `local_path`:
 
-Include the puzzle step's `moved` list if it is not empty.  That is the only
-thing in this job that can show whether studying a weak theme worked, so it is
-worth a line even on a quiet night.  Do not repeat the weakest-theme table every
-night; it barely changes and it is already in the note.
+| From `out/` | To |
+|---|---|
+| `games-*.pgn` | `chess/pending/` same name |
+| `*-analysis.md` | `chess/pending/` same name |
+| `candidates-*.csv` | `chess/pending/` same name |
+| `puzzles-*.md` | `chess/pending/` same name |
+| `puzzle-activity-*.ndjson` | `chess/pending/` same name |
+| `intake_state.json` | `chess/tools/intake_state.json` |
+| `puzzle_history.json` | `chess/tools/puzzle_history.json` |
+
+The last two overwrite their `chess/tools/` copies rather than going to pending,
+because tomorrow's run reads them.  **Write both every time, including on a
+quiet night.**  Skipping the state write makes tomorrow re-import tonight.
+
+Leave anything already sitting in `chess/pending/` alone.  It accumulates until
+Mitch reconciles it, and clearing it would lose nights he has not folded in yet.
+
+**4.  Report, in two or three sentences.**
+
+`{"status":"nothing_new"}` means no new games.  Say so in one line and stop.
+Do not write a session file for a day with no games.
+
+Otherwise: how many games, the ACPL median and range, and the `puzzles_moved`
+list if it is not empty.  That last one is the only thing here that can show
+whether studying a weak theme worked, so it earns its line.
+
+Do not summarise the games individually.  Do not quote the writeup back.  Do not
+analyse trends, hunt for contradictions, or give advice.  The writeup is already
+in `chess/pending/` and Mitch reads it there.  Your report exists so he knows
+the job ran and whether to go look.
+
+End with one line saying results are in `chess/pending/` and have not reached
+the Mac folder yet.
 
 ## What you must not do
 
-- Do not edit `chess/knowledge/chess-lessons-and-method.md`.  That doc mirrors
-  the Mac folder, and an edit here would be silently overwritten by the next
-  sync.  A correction goes in your session writeup, which Mitch folds in.
-- Do not promote puzzle candidates into any archive.  Candidates stay
-  candidates until a person picks them.
+- Do not edit `chess/knowledge/chess-lessons-and-method.md`.  It mirrors the Mac
+  folder and would be overwritten by the next sync.
+- Do not promote puzzle candidates into any archive.  That stays a human call.
 - Do not invent a workaround for the missing Mac.  If a step needs the folder,
-  the answer is that this run cannot do it.
+  this run cannot do it.
+- Do not use WebFetch for the chess hosts.  It declines them on robots rules,
+  which says nothing about the scripts; they use `urllib` from the container on
+  the account's egress allowlist and they work.  A WebFetch refusal is not
+  evidence of a missing fetch path.
 
 ## On the other side
 
 When Mitch next opens a desktop session, `tools/reconcile.py --pending <dir>`
-splits the bundled PGN back into `games/`, files the session writeup, merges
-the candidates and unions the state.  It is safe to run twice and dedupes by
-game id, so nothing doubles up.
+splits the bundled PGN back into `games/`, files the writeups, merges the
+candidates and unions both state files.  Safe to run twice; it dedupes by game
+id.
 
 Two spaces after a period.  Avoid em dashes.

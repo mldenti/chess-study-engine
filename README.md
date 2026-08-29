@@ -50,3 +50,24 @@ uncorrected clamp records the winning move as a 2000 centipawn error.
 Screening runs every ply at one fixed depth and ACPL comes only from that pass,
 so numbers stay comparable across games.  Flagged moves get a deeper look for a
 trustworthy best line, and that pass never feeds the average.
+
+## A warning about git through the Claude bridge
+
+Do not run `git init`, `git commit`, `git branch` or anything else that writes
+refs from a Claude session using the device bridge.  The mounted folder does not
+permit unlinking, so git cannot clean up `HEAD.lock`, `index.lock` or its
+temporary object files, and the next real git command fails with "Another git
+process seems to be running in this repository".
+
+Reading is fine: `git status`, `git log`, `git ls-files` are safe apart from
+leaving an `index.lock` behind.
+
+Run git on the Mac directly.  If a session has already jammed the repo:
+
+```
+rm -f .git/*.lock .git/objects/*.lock
+find .git/objects -name 'tmp_obj_*' -delete
+```
+
+Nothing is lost by this.  The stale objects are unreferenced temporaries and the
+locks are empty files.
