@@ -138,7 +138,7 @@ def filename_for(pgn, hero_names, time_class, seq):
     return "%s-%02d-%s-%s%s.pgn" % (datestr, seq[datestr], color, outcome, suffix)
 
 
-def fetch_chesscom(since_epoch, classes):
+def fetch_chesscom(since_epoch, classes, include_unrated=False):
     """Current and previous month archives, filtered to finished games."""
     out = []
     months = get("https://api.chess.com/pub/player/%s/games/archives" % CHESSCOM_USER.lower())
@@ -146,6 +146,13 @@ def fetch_chesscom(since_epoch, classes):
         data = json.loads(get(url))
         for g in data.get("games", []):
             if g.get("rules") != "chess":
+                continue
+            # Unrated Chess.com games are mostly "Play vs Coach", which allow
+            # takebacks.  Their ACPL is not comparable to a real game and was
+            # quietly contaminating the daily bucket until 29 Aug 2026.  The
+            # lichess branch has always passed rated=true; this is the same
+            # filter, applied on the side that was missing it.
+            if not include_unrated and not g.get("rated"):
                 continue
             if classes and g.get("time_class") not in classes:
                 continue
@@ -189,6 +196,8 @@ def main():
                     help="comma separated: rapid, blitz, bullet, daily.  'all' for no filter")
     ap.add_argument("--max", type=int, default=0,
                     help="process at most N games this run, oldest first; the rest wait for the next run")
+    ap.add_argument("--include-unrated", action="store_true",
+                    help="also take unrated games, which on Chess.com means Play vs Coach; their ACPL is not comparable because takebacks are allowed")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -202,7 +211,8 @@ def main():
     games = []
     for name, fn in (("chess.com", fetch_chesscom), ("lichess", fetch_lichess)):
         try:
-            got = fn(since, classes)
+            got = (fetch_chesscom(since, classes, a.include_unrated)
+                   if name == "chess.com" else fn(since, classes))
             print("%-10s %d new" % (name, len(got)), file=sys.stderr)
             games += got
         except Exception as e:
