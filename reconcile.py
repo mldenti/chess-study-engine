@@ -12,6 +12,7 @@ output in the Claude project instead.  This unpacks that output here:
   candidates-YYYYMMDD.csv   into puzzles/, still unpromoted
   puzzles-YYYYMMDD.md       the puzzle note, into sessions/
   puzzle-activity-*.ndjson  raw attempt history, into puzzles/
+  games_log.jsonl           merged into tools/, one row per game, keyed by id
   intake_state.json         merged into tools/, seen ids unioned rather than
                             replaced
   puzzle_history.json       merged into tools/, snapshots unioned by date
@@ -128,6 +129,7 @@ def main():
             added.append(name)
 
     # ---- session writeup ----------------------------------------------------
+    claimed = set()
     for src in sorted(glob.glob(os.path.join(pend, "*-analysis.md"))):
         base = os.path.basename(src)
         body = open(src, encoding="utf-8", errors="replace").read()
@@ -141,11 +143,12 @@ def main():
         if m:
             date = m.group(1)
             hi = 0
-            for fn in os.listdir(SESSIONS):
+            for fn in list(os.listdir(SESSIONS)) + sorted(claimed):
                 mm = re.match(r"^%s-(\d{2})-analysis\.md$" % date, fn)
                 if mm:
                     hi = max(hi, int(mm.group(1)))
             base = "%s-%02d-analysis.md" % (date, hi + 1)
+        claimed.add(base)
         dest = os.path.join(SESSIONS, base)
         if a.dry_run:
             print("  would write sessions/%s" % base)
@@ -189,6 +192,32 @@ def main():
         if not a.dry_run:
             shutil.copy(src, dest)
         print("  puzzles/%s" % os.path.basename(src))
+
+    # ---- per-game log -------------------------------------------------------
+    src = os.path.join(pend, "games_log.jsonl")
+    if os.path.exists(src):
+        lpath = os.path.join(HERE, "games_log.jsonl")
+        def rows(path):
+            out = []
+            if os.path.exists(path):
+                for line in open(path, encoding="utf-8"):
+                    line = line.strip()
+                    if line:
+                        try:
+                            out.append(json.loads(line))
+                        except ValueError:
+                            pass
+            return out
+        by_id = {}
+        for r in rows(lpath) + rows(src):     # incoming wins on a repeat id
+            if r.get("id"):
+                by_id[r["id"]] = r
+        merged = sorted(by_id.values(), key=lambda r: (r.get("date") or "", r.get("file") or ""))
+        if not a.dry_run:
+            with open(lpath, "w", encoding="utf-8") as fh:
+                for r in merged:
+                    fh.write(json.dumps(r) + "\n")
+        print("  tools/games_log.jsonl (%d games)" % len(merged))
 
     # ---- puzzle history -----------------------------------------------------
     src = os.path.join(pend, "puzzle_history.json")
