@@ -29,6 +29,7 @@ Produces in out/:
   puzzle-activity-*.ndjson    raw attempt history
   intake_state.json           updated
   puzzle_history.json         updated
+  games_log.jsonl             one row per game, appended, for the weekly pass
 
 Usage:
   python3 tools/cloud_nightly.py --max-games 25
@@ -154,7 +155,8 @@ def main():
     os.makedirs(os.path.join(work, "sessions"), exist_ok=True)
     os.makedirs(os.path.join(work, "puzzles"), exist_ok=True)
     run([py, os.path.join(HERE, "distill.py"), analysis, "--root", work,
-         "--date", datestr, "--seq", "01", "--min-loss", str(a.min_loss)], env)
+         "--date", datestr, "--seq", "01", "--min-loss", str(a.min_loss),
+         "--log", os.path.join(HERE, "games_log.jsonl")], env)
 
     # ---- 4. pack ------------------------------------------------------------
     bundle = os.path.join(out, "games-%s.pgn" % datestr)
@@ -168,7 +170,8 @@ def main():
             fh.write(text + "\n\n")
 
     for src in (os.path.join(work, "sessions", "%s-01-analysis.md" % datestr),
-                os.path.join(work, "puzzles", "candidates-%s.csv" % datestr)):
+                os.path.join(work, "puzzles", "candidates-%s.csv" % datestr),
+                os.path.join(HERE, "games_log.jsonl")):
         if os.path.exists(src):
             shutil.copy(src, os.path.join(out, os.path.basename(src)))
     shutil.copy(state_path, os.path.join(out, "intake_state.json"))

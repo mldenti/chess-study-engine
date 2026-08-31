@@ -20,10 +20,14 @@ by roughly 35k tokens a run.
 | `distill.py` | Session writeup and validated puzzle candidates | python-chess |
 | `puzzles_lichess.py` | Lichess puzzle dashboard, tracked over time | stdlib, API token |
 | `cloud_nightly.py` | Runs all of the above, and installs the engine only if there is work | stdlib |
+| `weekly_digest.py` | Trends the per-game log, refuses to report noise | stdlib |
 | `reconcile.py` | Folds a cloud run's output into the real folder | stdlib |
 | `promote_puzzles.py` | Moves reviewed candidates into the canonical archive | python-chess |
 
-`CLOUD-NIGHTLY.md` is the runbook the scheduled session follows.
+`CLOUD-NIGHTLY.md` and `WEEKLY.md` are the runbooks the two scheduled sessions
+follow.  The nightly is mechanical and thinks about nothing; the weekly is where
+trends get judged against `knowledge/`, and it only reads the knowledge doc when
+the arithmetic found something worth checking.
 `NIGHTLY.md` is the older on-the-Mac variant, kept for a manual run.
 
 ## Configuration
@@ -35,8 +39,8 @@ CHESSCOM_USER=someone LICHESS_USER=someone python3 tools/fetch_games.py
 ```
 
 Three files are deliberately not in this repo, and `.gitignore` keeps them out:
-`lichess_token.txt`, `intake_state.json`, `puzzle_history.json`.  The first is a
-credential.  The other two are mutable state that the nightly job reads and
+`lichess_token.txt`, `intake_state.json`, `puzzle_history.json`, `games_log.jsonl`.
+The first is a credential.  The others are mutable state that the nightly job reads and
 rewrites, so they live where that job can write them.
 
 ## Method

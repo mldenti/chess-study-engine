@@ -25,6 +25,10 @@ import argparse, csv, json, os, re, sys
 from collections import Counter, defaultdict
 import chess, chess.pgn
 
+MOTIF_TAGS = {"missedCapture", "missedCheck", "missedCaptureWithCheck", "missedMate",
+              "checkedInsteadOfCaptured", "leftHanging", "wrongCapture", "wrongCheck",
+              "quietMove"}
+
 VALUE = {chess.PAWN: 100, chess.KNIGHT: 320, chess.BISHOP: 330,
          chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 0}
 
@@ -180,6 +184,7 @@ def main():
                          "produce hundreds of candidates nobody will review")
     ap.add_argument("--min-loss", type=int, default=150,
                     help="minimum centipawn loss for a puzzle candidate")
+    ap.add_argument("--log", help="append one JSON line per game here, for trend tracking")
     a = ap.parse_args()
 
     data = [e for e in json.load(open(a.analysis_json)) if "error" not in e]
@@ -319,6 +324,55 @@ def main():
     else:
         A("None met the threshold.")
     A("")
+
+    # ---- per-game log ------------------------------------------------------
+    # One line per game, so the weekly pass can trend numerically instead of
+    # parsing prose out of these writeups.  Append only; the weekly never
+    # rewrites it.
+    if a.log:
+        seen_ids = set()
+        if os.path.exists(a.log):
+            for line in open(a.log, encoding="utf-8"):
+                try:
+                    seen_ids.add(json.loads(line)["id"])
+                except (ValueError, KeyError):
+                    pass
+        with open(a.log, "a", encoding="utf-8") as fh:
+            for e in sorted(data, key=lambda x: x["file"]):
+                gid = e.get("link") or e["file"]
+                if gid in seen_ids:
+                    continue
+                # Play vs Coach games allow takebacks, so their ACPL is not
+                # comparable.  Logged but flagged, so the weekly can exclude
+                # them without the row silently disappearing.
+                ev = ""
+                gp = os.path.join(games_dir, e["file"])
+                if os.path.exists(gp):
+                    for line in open(gp, encoding="utf-8", errors="replace"):
+                        if line.startswith("[Event "):
+                            ev = line.split('"')[1]
+                            break
+                mine = [f for f in e["flagged"]]
+                row = {
+                    "id": gid,
+                    "file": e["file"],
+                    "date": (e.get("date") or "").replace(".", "-"),
+                    "class": time_class(e.get("time_control"), e["file"]),
+                    "hero": e.get("hero"),
+                    "result": e.get("result"),
+                    "eco": e.get("eco"),
+                    "acpl": e["acpl"],
+                    "moves": e["moves"],
+                    "acpl_competitive": e["acpl_competitive"],
+                    "competitive_moves": e["competitive_moves"],
+                    "flagged": len(mine),
+                    "motifs": sorted({t for f in mine for t in (f.get("_themes") or [])
+                                      if t in MOTIF_TAGS}),
+                    "rated": "Coach" not in ev and "Coach-" not in (e.get("black") or ""),
+                    "engine_depth": e.get("screen_depth"),
+                    "logged": datestr,
+                }
+                fh.write(json.dumps(row) + "\n")
 
     sess_path = os.path.join(a.root, "sessions", "%s-%s-analysis.md" % (datestr, a.seq))
     os.makedirs(os.path.dirname(sess_path), exist_ok=True)

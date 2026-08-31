@@ -6,6 +6,7 @@ lichess_token.txt
 # guarantee merge pain and would leak nothing useful.
 intake_state.json
 puzzle_history.json
+games_log.jsonl
 
 __pycache__/
 *.pyc
