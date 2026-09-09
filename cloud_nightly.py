@@ -131,12 +131,19 @@ def main():
         except ValueError:
             puzzles = {"status": "unparseable"}
 
-    shutil.copy(state_path, os.path.join(out, "intake_state.json"))
     hist = os.path.join(HERE, "puzzle_history.json")
     if os.path.exists(hist):
         shutil.copy(hist, os.path.join(out, "puzzle_history.json"))
 
+    # intake_state is deliberately NOT staged here.  fetch_games.py has already
+    # marked tonight's games as seen in tools/intake_state.json, but in a cloud
+    # run the PGNs those ids refer to only exist inside this container.  If the
+    # run dies between here and the pack, publishing that state would tell
+    # tomorrow's run the games are handled when nothing was ever delivered, and
+    # they would never be offered again.  Stage it only once the pack succeeds,
+    # or here on a quiet night where there is no analysis left to fail.
     if not pgns:
+        shutil.copy(state_path, os.path.join(out, "intake_state.json"))
         print(json.dumps({"status": "nothing_new", "games": 0,
                           "puzzles_moved": puzzles.get("moved", []),
                           "out": sorted(os.listdir(out))}))

@@ -38,10 +38,16 @@ Accounts default to the author's and are overridable:
 CHESSCOM_USER=someone LICHESS_USER=someone python3 tools/fetch_games.py
 ```
 
-Three files are deliberately not in this repo, and `.gitignore` keeps them out:
+Four files are deliberately not in this repo, and `.gitignore` keeps them out:
 `lichess_token.txt`, `intake_state.json`, `puzzle_history.json`, `games_log.jsonl`.
 The first is a credential.  The others are mutable state that the nightly job reads and
 rewrites, so they live where that job can write them.
+
+When you reconcile a cloud run on the Mac, save `chess/tools/games_log.jsonl`
+from the project into the pending directory alongside the rest before running
+`reconcile.py`.  The project copy is the cumulative one; `reconcile.py` merges it
+by game id, so doing this twice costs nothing and skipping it leaves the Mac's
+log behind the project's.
 
 ## Method
 
