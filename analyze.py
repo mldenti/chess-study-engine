@@ -26,6 +26,8 @@ day's worth of blitz costs a few minutes.  Outputs JSON on stdout.
 import argparse, json, os, sys, shutil
 import chess, chess.pgn, chess.engine
 
+from motifs import motifs
+
 CAP = 1000
 MITCH_NAMES = {"yepokayitsmitch", "uffishgalumpher", "gleichbleibend"}
 
@@ -127,6 +129,19 @@ def analyze(eng, path, args):
         r["deep_eval"] = capped(info["score"], b.turn)
         r["deep_depth"] = args.deep_depth
 
+    # Motif tags go onto the move objects themselves.  These dicts are the same
+    # objects that appear in `plies`, so tagging here puts them in both lists,
+    # and the tags land in the JSON that is kept rather than only in the prose
+    # writeup that distill.py produces from it.
+    for r in flagged:
+        r["motifs"] = motifs(r["fen_before"], r["san"],
+                             r.get("deep_best_san") or r.get("best_san"), r["loss"])
+
+    # Lichess PGNs carry the game URL in Site; chess.com uses Link or GameUrl.
+    site = game.headers.get("Site") or ""
+    link = (game.headers.get("Link") or game.headers.get("GameUrl")
+            or (site if site.startswith("http") else None))
+
     return {
         "file": os.path.basename(path),
         "date": game.headers.get("Date"),
@@ -136,10 +151,13 @@ def analyze(eng, path, args):
         "time_control": game.headers.get("TimeControl"),
         "eco": game.headers.get("ECO"),
         "site": game.headers.get("Site"),
-        "link": game.headers.get("Link") or game.headers.get("GameUrl"),
+        "link": link,
         "hero": "white" if hero == chess.WHITE else "black",
         "engine": os.path.basename(find_engine()),
+        "engine_version": (eng.id or {}).get("name") or "unknown",
         "screen_depth": args.screen_depth,
+        "deep_depth": args.deep_depth,
+        "threshold": args.threshold,
         "moves": len(mine),
         "acpl": acpl,
         "competitive_moves": len(comp),
