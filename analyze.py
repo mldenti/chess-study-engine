@@ -145,6 +145,7 @@ def analyze(eng, path, args):
         "competitive_moves": len(comp),
         "acpl_competitive": acpl_comp,
         "flagged": flagged,
+        "plies": rows,
     }
 
 
