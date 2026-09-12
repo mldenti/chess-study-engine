@@ -163,7 +163,7 @@ def main():
     ap.add_argument("-o", "--out", help="write JSON here instead of stdout")
     args = ap.parse_args()
 
-    eng = chess.engine.SimpleEngine.popen_uci(find_engine())
+    eng = chess.engine.SimpleEngine.popen_uci(find_engine(), timeout=600)
     eng.configure({"Threads": args.threads, "Hash": args.hash})
     try:
         results = []
