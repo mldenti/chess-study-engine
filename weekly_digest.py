@@ -120,6 +120,9 @@ def main():
     ap.add_argument("--weeks", type=int, default=6, help="how much history to use as baseline")
     ap.add_argument("--out", default=None)
     ap.add_argument("--date", help="YYYY-MM-DD, treat this as today")
+    ap.add_argument("--min-new-attempts", type=int, default=6,
+                    help="a puzzle theme needs at least this many new attempts "
+                         "before a change in its performance counts as movement")
     a = ap.parse_args()
 
     today = (datetime.strptime(a.date, "%Y-%m-%d").date() if a.date
@@ -163,8 +166,11 @@ def main():
                     w = was.get("themes", {}).get(k)
                     if not w or not v.get("performance") or not w.get("performance"):
                         continue
-                    if v["nb"] <= w["nb"]:
-                        continue          # no new attempts, so the window slid
+                    if v["nb"] - w["nb"] < a.min_new_attempts:
+                        # Too few new attempts to distinguish a real change from
+                        # the 90 day window sliding.  A theme that moved 40
+                        # points on one solve moved because of that solve.
+                        continue
                     d = v["performance"] - w["performance"]
                     if abs(d) >= MIN_PUZZLE_SWING:
                         puzzle_moves.append({"theme": k, "delta": d,
@@ -254,11 +260,14 @@ def main():
                   % (p["theme"], p["delta"], p["performance"], p["new_attempts"],
                      "" if p["new_attempts"] == 1 else "s"))
             A("")
-            A("Only themes with new attempts are shown.  A theme that moves without")
-            A("new attempts moved because the 90 day window slid.")
+            A("Only themes with at least %d new attempts are shown.  Fewer than"
+              % a.min_new_attempts)
+            A("that and a swing says more about the sliding 90 day window than")
+            A("about the player.")
         else:
             A("")
-            A("No theme moved by %d or more on new attempts." % MIN_PUZZLE_SWING)
+            A("No theme moved by %d or more over at least %d new attempts."
+              % (MIN_PUZZLE_SWING, a.min_new_attempts))
     else:
         A("No puzzle history yet.")
     A("")
