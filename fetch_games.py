@@ -138,11 +138,34 @@ def filename_for(pgn, hero_names, time_class, seq):
     return "%s-%02d-%s-%s%s.pgn" % (datestr, seq[datestr], color, outcome, suffix)
 
 
+def chesscom_archives(since_epoch):
+    """Archive URLs covering since_epoch onward.
+
+    Chess.com publishes one archive per month that had games, so the list is
+    sparse.  Selecting by month rather than taking the last two is what lets
+    --since reach real history; the old [-2:] silently capped every fetch at
+    about eight weeks no matter what was asked for.  A nightly run passes a
+    since of yesterday and still gets exactly one or two archives, so this
+    costs nothing in the normal case.
+    """
+    urls = json.loads(get("https://api.chess.com/pub/player/%s/games/archives"
+                          % CHESSCOM_USER.lower()))["archives"]
+    cut = datetime.fromtimestamp(since_epoch, timezone.utc)
+    keep = []
+    for u in urls:
+        try:
+            y, m = int(u.rsplit("/", 2)[-2]), int(u.rsplit("/", 2)[-1])
+        except ValueError:
+            continue
+        if (y, m) >= (cut.year, cut.month):
+            keep.append(u)
+    return keep or urls[-1:]
+
+
 def fetch_chesscom(since_epoch, classes, include_unrated=False):
-    """Current and previous month archives, filtered to finished games."""
+    """Every monthly archive from the since date forward, finished games only."""
     out = []
-    months = get("https://api.chess.com/pub/player/%s/games/archives" % CHESSCOM_USER.lower())
-    for url in json.loads(months)["archives"][-2:]:
+    for url in chesscom_archives(since_epoch):
         data = json.loads(get(url))
         for g in data.get("games", []):
             if g.get("rules") != "chess":
